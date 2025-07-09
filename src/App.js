@@ -227,22 +227,48 @@ const HabitTracker = () => {
     console.log('Current permission:', currentPermission);
     console.log('Notification support:', 'Notification' in window);
     
+    let notificationShown = false;
+    
     if (currentPermission === 'granted') {
       try {
         const notification = new Notification(title, {
           body: body,
           icon: '/favicon.ico',
           badge: '/favicon.ico',
-          requireInteraction: false,
-          silent: false
+          requireInteraction: true,
+          silent: false,
+          tag: 'habit-reminder',
+          renotify: true
         });
         
         console.log('Notification created successfully');
+        
+        // Test if notification actually appears by checking if it fires events
+        let eventFired = false;
+        
+        notification.onshow = () => {
+          console.log('Notification actually displayed');
+          eventFired = true;
+          notificationShown = true;
+        };
+        
+        notification.onerror = (error) => {
+          console.error('Notification error event:', error);
+        };
         
         notification.onclick = () => {
           window.focus();
           notification.close();
         };
+        
+        // Wait a bit to see if the notification actually shows
+        setTimeout(() => {
+          if (!eventFired) {
+            console.log('Notification was created but never displayed - using fallback');
+            notification.close();
+            alert(`🔔 ${title}\n\n${body}\n\n(Browser notifications seem to be blocked - using popup instead)`);
+          }
+        }, 500);
         
         return;
       } catch (error) {
@@ -252,9 +278,11 @@ const HabitTracker = () => {
       console.log('Permission not granted, current state:', currentPermission);
     }
     
-    // Fallback - show browser alert
-    console.log('Using alert fallback');
-    alert(`${title}\n\n${body}`);
+    // Immediate fallback if permission not granted or creation failed
+    if (!notificationShown) {
+      console.log('Using alert fallback');
+      alert(`🔔 ${title}\n\n${body}`);
+    }
   };
 
   const scheduleReminder = () => {
