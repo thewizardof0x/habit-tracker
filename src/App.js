@@ -10,6 +10,12 @@ const HabitTracker = () => {
   const [showGoals, setShowGoals] = useState(false);
   const [showBadges, setShowBadges] = useState(false);
   const [showStats, setShowStats] = useState(false);
+  const [showReminders, setShowReminders] = useState(false);
+  const [reminderTime, setReminderTime] = useState('18:00');
+  const [userEmail, setUserEmail] = useState('');
+  const [notificationPermission, setNotificationPermission] = useState('default');
+  const [celebrationMessage, setCelebrationMessage] = useState('');
+  const [showCelebration, setShowCelebration] = useState(false);
 
   const today = new Date();
   const currentMonth = today.getMonth();
@@ -85,12 +91,50 @@ const HabitTracker = () => {
     if (day > today.getDate()) return;
     
     const newCompletedDays = new Set(completedDays);
-    if (newCompletedDays.has(day)) {
+    const wasCompleted = newCompletedDays.has(day);
+    
+    if (wasCompleted) {
       newCompletedDays.delete(day);
     } else {
       newCompletedDays.add(day);
+      
+      // Check for celebrations
+      if (day === today.getDate()) {
+        const newStreak = calculateCurrentStreak(newCompletedDays);
+        const newTotalDays = newCompletedDays.size;
+        
+        // Celebrate streaks
+        if (newStreak === 7) triggerCelebration('🔥 Week Warrior badge unlocked!');
+        else if (newStreak === 14) triggerCelebration('👑 Consistency King badge unlocked!');
+        else if (newStreak === 21) triggerCelebration('💎 Unstoppable badge unlocked!');
+        else if (newStreak === 30) triggerCelebration('🏆 Legend badge unlocked!');
+        else if (newTotalDays === 10) triggerCelebration('⭐ Ten Club badge unlocked!');
+        else if (newTotalDays === monthlyGoal) triggerCelebration('🎊 Month Master badge unlocked!');
+        else if (getCurrentWeekCompletions() + 1 === weeklyGoal) triggerCelebration('💪 Goal Crusher badge unlocked!');
+        else triggerCelebration(`Great job! Day ${day} completed! 🎉`);
+        
+        // Send notification
+        if (notificationPermission === 'granted') {
+          sendNotification(
+            'Habit Completed! 🎉',
+            `You completed ${habitName} today! Current streak: ${newStreak} days`,
+            '✅'
+          );
+        }
+      }
     }
+    
     setCompletedDays(newCompletedDays);
+  };
+
+  const calculateCurrentStreak = (days) => {
+    let streak = 0;
+    let checkDay = today.getDate();
+    while (checkDay > 0 && days.has(checkDay)) {
+      streak++;
+      checkDay--;
+    }
+    return streak;
   };
 
   const getIntensity = (day) => {
@@ -103,7 +147,134 @@ const HabitTracker = () => {
     return completedDays.has(day) ? 'hover:bg-green-600' : 'hover:bg-gray-300';
   };
 
-  // Calculate day of week statistics
+  // Notification and reminder functions
+  const requestNotificationPermission = async () => {
+    if ('Notification' in window) {
+      const permission = await Notification.requestPermission();
+      setNotificationPermission(permission);
+      return permission === 'granted';
+    }
+    return false;
+  };
+
+  const sendNotification = (title, body, icon = '🎯') => {
+    if (notificationPermission === 'granted') {
+      new Notification(title, {
+        body: body,
+        icon: `data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg'><text y='32' font-size='32'>${icon}</text></svg>`,
+        requireInteraction: true
+      });
+    }
+  };
+
+  const scheduleReminder = () => {
+    const now = new Date();
+    const [hours, minutes] = reminderTime.split(':');
+    const reminderDate = new Date();
+    reminderDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+    
+    if (reminderDate <= now) {
+      reminderDate.setDate(reminderDate.getDate() + 1);
+    }
+    
+    const timeUntilReminder = reminderDate.getTime() - now.getTime();
+    
+    setTimeout(() => {
+      if (!completedDays.has(today.getDate())) {
+        sendNotification(
+          `${habitName} Reminder! ⏰`,
+          `Don't forget your daily ${habitName.toLowerCase()}. Keep your ${currentStreak}-day streak alive!`,
+          '🔔'
+        );
+      }
+    }, timeUntilReminder);
+  };
+
+  const triggerCelebration = (message) => {
+    setCelebrationMessage(message);
+    setShowCelebration(true);
+    setTimeout(() => setShowCelebration(false), 4000);
+  };
+
+  const generateGmailReminder = () => {
+    const subject = encodeURIComponent(`${habitName} Daily Reminder`);
+    const body = encodeURIComponent(`Hi there! 👋
+
+This is your daily reminder to complete: ${habitName}
+
+📊 Your Current Stats:
+• Current streak: ${currentStreak} days
+• Goal this week: ${getCurrentWeekCompletions()}/${weeklyGoal} days  
+• Goal this month: ${completedDays.size}/${monthlyGoal} days
+• Overall completion rate: ${Math.round((completedDays.size / today.getDate()) * 100)}%
+
+Keep up the great work! 💪
+
+Track your progress: ${window.location.href}
+
+Best,
+Your Habit Tracker 🎯`);
+    
+    // If user provided email, use it as recipient
+    const recipient = userEmail ? encodeURIComponent(userEmail) : '';
+    const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${recipient}&su=${subject}&body=${body}`;
+    window.open(gmailUrl, '_blank');
+  };
+
+  // Smart email detection attempt
+  const tryDetectEmail = () => {
+    // Try to get email from Google account (if signed in)
+    if (window.gapi && window.gapi.auth2) {
+      const authInstance = window.gapi.auth2.getAuthInstance();
+      if (authInstance && authInstance.isSignedIn.get()) {
+        const profile = authInstance.currentUser.get().getBasicProfile();
+        const email = profile.getEmail();
+        if (email) {
+          setUserEmail(email);
+          return true;
+        }
+      }
+    }
+    
+    // Try localStorage for previously saved email
+    const savedEmail = localStorage.getItem('habitTrackerEmail');
+    if (savedEmail) {
+      setUserEmail(savedEmail);
+      return true;
+    }
+    
+    return false;
+  };
+
+  const saveEmailPreference = (email) => {
+    setUserEmail(email);
+    if (email) {
+      localStorage.setItem('habitTrackerEmail', email);
+    } else {
+      localStorage.removeItem('habitTrackerEmail');
+    }
+  };
+
+  const generateGoogleCalendarReminder = () => {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(parseInt(reminderTime.split(':')[0]), parseInt(reminderTime.split(':')[1]), 0, 0);
+    
+    const startTime = tomorrow.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+    const endTime = new Date(tomorrow.getTime() + 30 * 60000).toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+    
+    const title = encodeURIComponent(`${habitName} Daily Reminder`);
+    const details = encodeURIComponent(`Time for your daily ${habitName}! 
+
+Current streak: ${currentStreak} days
+Don't break the chain! 🔥
+
+Track progress: ${window.location.href}`);
+    
+    const googleCalendarUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${startTime}/${endTime}&details=${details}&recur=RRULE:FREQ=DAILY`;
+    
+    window.open(googleCalendarUrl, '_blank');
+  };
   const getDayOfWeekStats = () => {
     const dayStats = Array(7).fill(null).map((_, i) => ({
       day: dayNames[i],
@@ -276,7 +447,141 @@ const HabitTracker = () => {
           >
             {showStats ? 'Hide Stats' : 'Advanced Stats'}
           </button>
+          <button
+            onClick={() => setShowReminders(!showReminders)}
+            className="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors text-sm"
+          >
+            {showReminders ? 'Hide Reminders' : 'Set Reminders'}
+          </button>
         </div>
+
+        {/* Celebration Overlay */}
+        {showCelebration && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 pointer-events-none">
+            <div className="bg-white p-8 rounded-xl shadow-2xl transform animate-bounce">
+              <div className="text-2xl text-center font-bold text-gray-800">
+                {celebrationMessage}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Reminders Section */}
+        {showReminders && (
+          <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+            <h3 className="text-lg font-semibold text-gray-800 mb-4">Reminders & Notifications</h3>
+            
+            <div className="space-y-4">
+              {/* Browser Notifications */}
+              <div className="bg-white p-4 rounded-lg border">
+                <h4 className="font-semibold text-gray-700 mb-2">🔔 Browser Notifications</h4>
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3">
+                    <label className="text-sm text-gray-600">Daily reminder time:</label>
+                    <input
+                      type="time"
+                      value={reminderTime}
+                      onChange={(e) => setReminderTime(e.target.value)}
+                      className="px-2 py-1 border border-gray-300 rounded"
+                    />
+                  </div>
+                  
+                  <div className="flex gap-2">
+                    {notificationPermission !== 'granted' ? (
+                      <button
+                        onClick={requestNotificationPermission}
+                        className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm"
+                      >
+                        Enable Notifications
+                      </button>
+                    ) : (
+                      <div className="flex gap-2">
+                        <button
+                          onClick={scheduleReminder}
+                          className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 text-sm"
+                        >
+                          Schedule Daily Reminder
+                        </button>
+                        <button
+                          onClick={() => sendNotification('Test Notification', 'This is how your reminders will look!')}
+                          className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 text-sm"
+                        >
+                          Test Notification
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div className="text-xs text-gray-500">
+                    Status: {notificationPermission === 'granted' ? '✅ Enabled' : notificationPermission === 'denied' ? '❌ Blocked' : '⏳ Not set up'}
+                  </div>
+                </div>
+              </div>
+
+              {/* Email Reminders */}
+              <div className="bg-white p-4 rounded-lg border">
+                <h4 className="font-semibold text-gray-700 mb-2">📧 Email Reminders</h4>
+                
+                {/* Email input */}
+                <div className="mb-3">
+                  <label className="block text-sm text-gray-600 mb-1">Your email (optional - for pre-filled reminders):</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="email"
+                      value={userEmail}
+                      onChange={(e) => saveEmailPreference(e.target.value)}
+                      placeholder="your.email@gmail.com"
+                      className="flex-1 px-3 py-1 border border-gray-300 rounded text-sm"
+                    />
+                    <button
+                      onClick={tryDetectEmail}
+                      className="px-3 py-1 bg-gray-500 text-white rounded hover:bg-gray-600 text-xs"
+                    >
+                      Auto-detect
+                    </button>
+                  </div>
+                  <div className="text-xs text-gray-500 mt-1">
+                    We'll remember this and pre-fill the "To" field in Gmail
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <button
+                    onClick={generateGmailReminder}
+                    className="px-4 py-2 bg-indigo-500 text-white rounded hover:bg-indigo-600 text-sm mr-2"
+                  >
+                    📧 Create Gmail Reminder
+                  </button>
+                  <button
+                    onClick={generateGoogleCalendarReminder}
+                    className="px-4 py-2 bg-purple-500 text-white rounded hover:bg-purple-600 text-sm"
+                  >
+                    📅 Add to Google Calendar
+                  </button>
+                  <div className="text-xs text-gray-500 mt-2">
+                    Gmail opens with a pre-written reminder email{userEmail ? ` to ${userEmail}` : ''}. Google Calendar creates a daily recurring reminder event.
+                  </div>
+                </div>
+              </div>
+
+              {/* Smart Alerts */}
+              <div className="bg-white p-4 rounded-lg border">
+                <h4 className="font-semibold text-gray-700 mb-2">⚡ Smart Alerts</h4>
+                <div className="text-sm text-gray-600 space-y-1">
+                  <div>• Automatic celebrations when you unlock badges 🎉</div>
+                  <div>• Streak warnings to keep you motivated 🔥</div>
+                  <div>• Goal progress notifications 🎯</div>
+                  <div>• Daily completion confirmations ✅</div>
+                </div>
+                {!completedDays.has(today.getDate()) && (
+                  <div className="mt-3 p-2 bg-yellow-100 border border-yellow-400 rounded text-sm">
+                    💡 <strong>Reminder:</strong> You haven't completed your habit today! Don't break your {currentStreak}-day streak.
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Advanced Statistics Section */}
         {showStats && (
@@ -501,13 +806,14 @@ const HabitTracker = () => {
             <div
               key={index}
               onClick={() => day && toggleDay(day)}
-              className={`
+                              className={`
                 w-8 h-8 rounded-sm flex items-center justify-center text-xs font-medium
                 transition-colors duration-200 cursor-pointer
                 ${day ? getIntensity(day) : 'bg-transparent'}
                 ${day && day <= today.getDate() ? getHoverIntensity(day) : ''}
                 ${day && day > today.getDate() ? 'cursor-not-allowed opacity-50' : ''}
                 ${completedDays.has(day) ? 'text-white' : 'text-gray-600'}
+                ${day === today.getDate() && !completedDays.has(day) ? 'ring-2 ring-orange-400 animate-pulse' : ''}
               `}
               title={day ? `${monthNames[currentMonth]} ${day}${completedDays.has(day) ? ' - Completed' : ' - Click to mark as completed'}` : ''}
             >
