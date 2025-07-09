@@ -158,12 +158,24 @@ const HabitTracker = () => {
   };
 
   const sendNotification = (title, body, icon = '🎯') => {
-    if (notificationPermission === 'granted') {
-      new Notification(title, {
-        body: body,
-        icon: `data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg'><text y='32' font-size='32'>${icon}</text></svg>`,
-        requireInteraction: true
-      });
+    if ('Notification' in window && Notification.permission === 'granted') {
+      try {
+        new Notification(title, {
+          body: body,
+          icon: '/favicon.ico',
+          badge: '/favicon.ico',
+          requireInteraction: false,
+          silent: false
+        });
+      } catch (error) {
+        console.error('Notification error:', error);
+        // Fallback - show browser alert
+        alert(`${title}\n\n${body}`);
+      }
+    } else {
+      console.log('Notifications not supported or not permitted');
+      // Fallback - show browser alert
+      alert(`${title}\n\n${body}`);
     }
   };
 
@@ -503,7 +515,7 @@ Track progress: ${window.location.href}`);
                           Schedule Daily Reminder
                         </button>
                         <button
-                          onClick={() => sendNotification('Test Notification', 'This is how your reminders will look!')}
+                          onClick={() => sendNotification('Test Notification! 🎯', 'This is how your habit reminders will look! If you see this, notifications are working perfectly.')}
                           className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 text-sm"
                         >
                           Test Notification
