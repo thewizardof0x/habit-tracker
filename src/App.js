@@ -325,44 +325,64 @@ const HabitTracker = () => {
     }
     
     const timeUntilReminder = reminderDate.getTime() - now.getTime();
+    const minutesUntilReminder = Math.round(timeUntilReminder / 1000 / 60);
     
+    console.log(`Current time: ${now.toLocaleString()}`);
     console.log(`Reminder scheduled for: ${reminderDate.toLocaleString()}`);
-    console.log(`Time until reminder: ${Math.round(timeUntilReminder / 1000 / 60)} minutes`);
+    console.log(`Time until reminder: ${minutesUntilReminder} minutes`);
+    console.log(`Milliseconds until reminder: ${timeUntilReminder}`);
     
-    setTimeout(() => {
-      console.log('Reminder time reached!');
-      if (!completedDays.has(today.getDate())) {
+    // Clear any existing reminder
+    if (window.habitReminderTimeout) {
+      clearTimeout(window.habitReminderTimeout);
+      console.log('Cleared existing reminder');
+    }
+    
+    // Set the new reminder
+    window.habitReminderTimeout = setTimeout(() => {
+      console.log('🔔 Reminder time reached!');
+      console.log(`Current time: ${new Date().toLocaleString()}`);
+      
+      // Check if habit was completed today
+      const todayDate = new Date().getDate();
+      const isCompleted = completedDays.has(todayDate);
+      
+      console.log(`Today's date: ${todayDate}`);
+      console.log(`Habit completed today: ${isCompleted}`);
+      
+      if (!isCompleted) {
         const title = `${habitName} Reminder! ⏰`;
         const body = `Don't forget your daily ${habitName.toLowerCase()}. Keep your ${currentStreak}-day streak alive!`;
         
-        // Force check permission again at reminder time
-        const currentPermission = 'Notification' in window ? Notification.permission : 'denied';
-        console.log('Permission at reminder time:', currentPermission);
-        
-        if (currentPermission === 'granted') {
-          try {
-            new Notification(title, {
-              body: body,
-              icon: '/favicon.ico',
-              requireInteraction: true,
-              silent: false
-            });
-            console.log('Notification sent successfully');
-          } catch (error) {
-            console.error('Notification failed:', error);
-            alert(`${title}\n\n${body}`);
-          }
-        } else {
-          console.log('Using alert fallback for reminder');
-          alert(`${title}\n\n${body}`);
-        }
+        console.log('Sending reminder notification...');
+        sendNotification(title, body);
       } else {
-        console.log('Habit already completed today, skipping reminder');
+        console.log('✅ Habit already completed today - no reminder needed');
+        // Optional: send congratulations instead
+        const title = `Great job! 🎉`;
+        const body = `You already completed your ${habitName.toLowerCase()} today. Keep it up!`;
+        sendNotification(title, body);
       }
+      
+      // Auto-schedule for tomorrow
+      console.log('Auto-scheduling reminder for tomorrow...');
+      setTimeout(() => {
+        scheduleReminder();
+      }, 1000);
+      
     }, timeUntilReminder);
     
-    // Show confirmation
-    alert(`Daily reminder scheduled for ${reminderDate.toLocaleTimeString()}!\n\nCheck the browser console for debug info.`);
+    // Show confirmation with more details
+    const confirmationMessage = `Daily reminder set! 🔔
+
+⏰ Reminder time: ${reminderDate.getHours().toString().padStart(2, '0')}:${reminderDate.getMinutes().toString().padStart(2, '0')}
+📅 Date: ${reminderDate.toLocaleDateString()}
+⏳ Time until reminder: ${minutesUntilReminder} minutes
+
+Keep this browser tab open for reminders to work.
+Check the console for debug info.`;
+    
+    alert(confirmationMessage);
   };
 
   const triggerCelebration = (message) => {
