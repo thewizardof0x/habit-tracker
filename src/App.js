@@ -11,6 +11,10 @@ const HabitTracker = () => {
   const [showBadges, setShowBadges] = useState(false);
   const [showStats, setShowStats] = useState(false);
   const [showReminders, setShowReminders] = useState(false);
+  const [showCoach, setShowCoach] = useState(false);
+  const [coachMessages, setCoachMessages] = useState([]);
+  const [userMessage, setUserMessage] = useState('');
+  const [coachLoading, setCoachLoading] = useState(false);
   const [reminderTime, setReminderTime] = useState('18:00');
   const [userEmail, setUserEmail] = useState('');
   const [notificationPermission, setNotificationPermission] = useState('default');
@@ -174,7 +178,115 @@ const HabitTracker = () => {
     return weekPerformance;
   };
 
-  // Play notification sound
+  // Generate habit data CSV for coach context
+  const generateHabitDataCSV = () => {
+    const csvData = [];
+    
+    // Header
+    csvData.push('Date,Day_of_Week,Completed,Streak_Day,Month_Progress');
+    
+    // Data for each day of the month
+    for (let day = 1; day <= today.getDate(); day++) {
+      const date = new Date(currentYear, currentMonth, day);
+      const dayOfWeek = dayNames[date.getDay()];
+      const completed = completedDays.has(day) ? 'Yes' : 'No';
+      const streakDay = calculateStreakAtDay(day);
+      const monthProgress = Math.round((Array.from(completedDays).filter(d => d <= day).length / day) * 100);
+      
+      csvData.push(`${currentYear}-${(currentMonth + 1).toString().padStart(2, '0')}-${day.toString().padStart(2, '0')},${dayOfWeek},${completed},${streakDay},${monthProgress}%`);
+    }
+    
+    return csvData.join('\n');
+  };
+
+  const calculateStreakAtDay = (targetDay) => {
+    let streak = 0;
+    let checkDay = targetDay;
+    while (checkDay > 0 && completedDays.has(checkDay)) {
+      streak++;
+      checkDay--;
+    }
+    return streak;
+  };
+
+  // AI Coach functionality
+  const sendMessageToCoach = async () => {
+    if (!userMessage.trim()) return;
+    
+    setCoachLoading(true);
+    const newUserMessage = { role: 'user', content: userMessage.trim(), timestamp: new Date() };
+    const updatedMessages = [...coachMessages, newUserMessage];
+    setCoachMessages(updatedMessages);
+    setUserMessage('');
+    
+    try {
+      // Prepare comprehensive context for the coach
+      const habitDataCSV = generateHabitDataCSV();
+      const weeklyStats = getDayOfWeekStats();
+      const monthlyTrends = getMonthlyTrends();
+      const unlockedBadgesList = badges.filter(badge => isBadgeUnlocked(badge));
+      
+      const contextPrompt = `You are a friendly, supportive habit coach helping someone with their "${habitName}" habit. 
+
+CURRENT HABIT DATA (CSV format):
+${habitDataCSV}
+
+CURRENT STATISTICS:
+- Current Streak: ${currentStreak} days
+- Longest Streak: ${longestStreak} days  
+- Completion Rate: ${completionRate}%
+- Weekly Goal: ${weeklyGoal} days/week (currently ${getCurrentWeekCompletions()}/${weeklyGoal})
+- Monthly Goal: ${monthlyGoal} days/month (currently ${completedDays.size}/${monthlyGoal})
+- Days completed this month: ${completedDays.size}
+- Days missed this month: ${today.getDate() - completedDays.size}
+
+WEEKLY PERFORMANCE BY DAY:
+${weeklyStats.map(stat => `${stat.day}: ${stat.rate}% success rate (${stat.completed}/${stat.total})`).join('\n')}
+
+UNLOCKED BADGES: ${unlockedBadgesList.map(badge => badge.name).join(', ') || 'None yet'}
+
+CONVERSATION HISTORY:
+${JSON.stringify(updatedMessages)}
+
+Please respond as a supportive, encouraging habit coach. Be specific about their data, celebrate wins, offer practical advice for challenges, and keep responses conversational and motivating. Focus on their progress and provide actionable suggestions based on their actual performance patterns.
+
+Respond with a JSON object:
+{
+  "response": "Your coaching response here",
+  "encouragement_level": "high/medium/low",
+  "action_suggestions": ["suggestion1", "suggestion2"]
+}
+
+Your entire response MUST be valid JSON only. Do not include any text outside the JSON structure.`;
+
+      const response = await window.claude.complete(contextPrompt);
+      const coachResponse = JSON.parse(response);
+      
+      const newCoachMessage = { 
+        role: 'coach', 
+        content: coachResponse.response, 
+        timestamp: new Date(),
+        suggestions: coachResponse.action_suggestions || []
+      };
+      
+      setCoachMessages([...updatedMessages, newCoachMessage]);
+      
+    } catch (error) {
+      console.error('Coach response error:', error);
+      const errorMessage = { 
+        role: 'coach', 
+        content: "I'm having trouble connecting right now, but I'm here to support you! Keep up the great work with your habits. 💪", 
+        timestamp: new Date() 
+      };
+      setCoachMessages([...updatedMessages, errorMessage]);
+    }
+    
+    setCoachLoading(false);
+  };
+
+  const clearCoachChat = () => {
+    setCoachMessages([]);
+  };
   const playNotificationSound = () => {
     try {
       // Create an audio context and play a notification beep
@@ -681,6 +793,12 @@ Track progress: ${window.location.href}`);
           >
             {showReminders ? 'Hide Reminders' : 'Set Reminders'}
           </button>
+          <button
+            onClick={() => setShowCoach(!showCoach)}
+            className="px-4 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition-colors text-sm"
+          >
+            {showCoach ? 'Hide AI Coach' : 'AI Habit Coach'}
+          </button>
         </div>
 
         {/* Celebration Overlay */}
@@ -690,6 +808,95 @@ Track progress: ${window.location.href}`);
               <div className="text-2xl text-center font-bold text-gray-800">
                 {celebrationMessage}
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* AI Habit Coach Section */}
+        {showCoach && (
+          <div className="mb-6 p-4 bg-gradient-to-br from-indigo-50 to-purple-50 rounded-lg border border-indigo-200">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-indigo-800">🤖 AI Habit Coach</h3>
+              <button
+                onClick={clearCoachChat}
+                className="px-3 py-1 text-xs bg-gray-200 text-gray-600 rounded hover:bg-gray-300 transition-colors"
+              >
+                Clear Chat
+              </button>
+            </div>
+            
+            <div className="bg-white rounded-lg p-4 mb-4 max-h-96 overflow-y-auto border">
+              {coachMessages.length === 0 ? (
+                <div className="text-center text-gray-500 py-8">
+                  <div className="text-4xl mb-2">👋</div>
+                  <p className="text-sm">Hi! I'm your AI habit coach. I can see all your habit data and I'm here to help you succeed!</p>
+                  <p className="text-xs mt-2 text-gray-400">Ask me about your progress, get motivation, or request personalized advice.</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {coachMessages.map((message, index) => (
+                    <div key={index} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                      <div className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
+                        message.role === 'user' 
+                          ? 'bg-indigo-500 text-white' 
+                          : 'bg-gray-100 text-gray-800'
+                      }`}>
+                        <p className="text-sm">{message.content}</p>
+                        {message.suggestions && message.suggestions.length > 0 && (
+                          <div className="mt-2 pt-2 border-t border-gray-300">
+                            <p className="text-xs font-semibold mb-1">💡 Suggestions:</p>
+                            <ul className="text-xs space-y-1">
+                              {message.suggestions.map((suggestion, i) => (
+                                <li key={i}>• {suggestion}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                        <p className="text-xs mt-1 opacity-70">
+                          {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                  {coachLoading && (
+                    <div className="flex justify-start">
+                      <div className="bg-gray-100 text-gray-800 px-4 py-2 rounded-lg max-w-xs">
+                        <div className="flex items-center space-x-2">
+                          <div className="flex space-x-1">
+                            <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+                            <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                            <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                          </div>
+                          <span className="text-xs">Coach is thinking...</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+            
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={userMessage}
+                onChange={(e) => setUserMessage(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && sendMessageToCoach()}
+                placeholder="Ask your coach anything about your habits..."
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
+                disabled={coachLoading}
+              />
+              <button
+                onClick={sendMessageToCoach}
+                disabled={coachLoading || !userMessage.trim()}
+                className="px-4 py-2 bg-indigo-500 text-white rounded-md hover:bg-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
+              >
+                Send
+              </button>
+            </div>
+            
+            <div className="mt-3 text-xs text-gray-500">
+              💡 <strong>Try asking:</strong> "How am I doing this week?" • "What day should I focus on?" • "Give me motivation!" • "Analyze my patterns"
             </div>
           </div>
         )}
