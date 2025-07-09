@@ -250,9 +250,11 @@ const HabitTracker = () => {
           body: body,
           icon: '/favicon.ico',
           requireInteraction: true,
-          silent: false,
+          silent: false,  // Explicitly request sound
+          sound: '/notification.mp3', // Custom sound (if available)
           tag: 'habit-reminder-' + Date.now(),
-          renotify: true
+          renotify: true,
+          vibrate: [200, 100, 200] // For devices that support vibration
         });
         
         console.log('Notification object created');
