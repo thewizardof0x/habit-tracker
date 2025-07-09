@@ -259,10 +259,23 @@ const HabitTracker = () => {
         
         // Set up event handlers
         let notificationWorked = false;
+        let userInteracted = false;
         
         notification.onshow = () => {
-          console.log('✅ Notification actually displayed!');
+          console.log('⚠️ onshow event fired (but this can be unreliable on Mac)');
+          // Don't trust onshow on Mac - it often lies
+        };
+        
+        notification.onclick = () => {
+          console.log('✅ Notification was actually clicked - it definitely showed!');
+          userInteracted = true;
           notificationWorked = true;
+          window.focus();
+          notification.close();
+        };
+        
+        notification.onclose = () => {
+          console.log('Notification closed');
         };
         
         notification.onerror = (error) => {
@@ -270,26 +283,21 @@ const HabitTracker = () => {
           alert(`🔔 ${title}\n\n${body}\n\n(Notification error - using popup fallback)`);
         };
         
-        notification.onclick = () => {
-          console.log('Notification clicked');
-          window.focus();
-          notification.close();
-        };
-        
-        // Force fallback if notification doesn't show within 1 second
+        // Mac Chrome often lies about notifications working, so always show fallback after delay
         setTimeout(() => {
-          if (!notificationWorked) {
-            console.log('⚠️ Notification created but never displayed - using alert fallback');
+          if (!userInteracted) {
+            console.log('⚠️ No user interaction with notification detected - likely silently blocked');
+            console.log('Using reliable alert fallback...');
             try {
               notification.close();
             } catch (e) {
               console.log('Could not close notification:', e);
             }
-            alert(`🔔 ${title}\n\n${body}\n\n(Browser notifications seem to be silently blocked - using popup instead)`);
+            alert(`🔔 ${title}\n\n${body}\n\n(Browser notifications seem to be silently blocked by macOS/Chrome - using reliable popup instead)`);
           }
-        }, 1000);
+        }, 2000); // Give 2 seconds for user to potentially click
         
-        console.log('Notification setup complete, waiting to see if it displays...');
+        console.log('Notification setup complete, waiting to see if user interacts...');
         return;
         
       } catch (error) {
