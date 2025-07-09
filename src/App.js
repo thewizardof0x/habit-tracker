@@ -17,6 +17,13 @@ const HabitTracker = () => {
   const [celebrationMessage, setCelebrationMessage] = useState('');
   const [showCelebration, setShowCelebration] = useState(false);
 
+  // Check notification permission on component mount
+  useEffect(() => {
+    if ('Notification' in window) {
+      setNotificationPermission(Notification.permission);
+    }
+  }, []);
+
   const today = new Date();
   const currentMonth = today.getMonth();
   const currentYear = today.getFullYear();
@@ -150,15 +157,29 @@ const HabitTracker = () => {
   // Notification and reminder functions
   const requestNotificationPermission = async () => {
     if ('Notification' in window) {
-      const permission = await Notification.requestPermission();
-      setNotificationPermission(permission);
-      return permission === 'granted';
+      try {
+        const permission = await Notification.requestPermission();
+        setNotificationPermission(permission);
+        
+        // Force a re-check after permission change
+        setTimeout(() => {
+          setNotificationPermission(Notification.permission);
+        }, 100);
+        
+        return permission === 'granted';
+      } catch (error) {
+        console.error('Permission request failed:', error);
+        return false;
+      }
     }
     return false;
   };
 
   const sendNotification = (title, body, icon = '🎯') => {
-    if ('Notification' in window && Notification.permission === 'granted') {
+    // Always check current permission, not state
+    const currentPermission = 'Notification' in window ? Notification.permission : 'denied';
+    
+    if (currentPermission === 'granted') {
       try {
         new Notification(title, {
           body: body,
@@ -173,7 +194,7 @@ const HabitTracker = () => {
         alert(`${title}\n\n${body}`);
       }
     } else {
-      console.log('Notifications not supported or not permitted');
+      console.log('Notifications not permitted, using fallback');
       // Fallback - show browser alert
       alert(`${title}\n\n${body}`);
     }
@@ -499,33 +520,41 @@ Track progress: ${window.location.href}`);
                   </div>
                   
                   <div className="flex gap-2">
-                    {notificationPermission !== 'granted' ? (
-                      <button
-                        onClick={requestNotificationPermission}
-                        className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm"
-                      >
-                        Enable Notifications
-                      </button>
-                    ) : (
-                      <div className="flex gap-2">
+                    {(() => {
+                      const currentPermission = 'Notification' in window ? Notification.permission : 'denied';
+                      return currentPermission !== 'granted' ? (
                         <button
-                          onClick={scheduleReminder}
-                          className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 text-sm"
+                          onClick={requestNotificationPermission}
+                          className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm"
                         >
-                          Schedule Daily Reminder
+                          Enable Notifications
                         </button>
-                        <button
-                          onClick={() => sendNotification('Test Notification! 🎯', 'This is how your habit reminders will look! If you see this, notifications are working perfectly.')}
-                          className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 text-sm"
-                        >
-                          Test Notification
-                        </button>
-                      </div>
-                    )}
+                      ) : (
+                        <div className="flex gap-2">
+                          <button
+                            onClick={scheduleReminder}
+                            className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 text-sm"
+                          >
+                            Schedule Daily Reminder
+                          </button>
+                          <button
+                            onClick={() => sendNotification('Test Notification! 🎯', 'This is how your habit reminders will look! If you see this, notifications are working perfectly.')}
+                            className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 text-sm"
+                          >
+                            Test Notification
+                          </button>
+                        </div>
+                      );
+                    })()}
                   </div>
                   
                   <div className="text-xs text-gray-500">
-                    Status: {notificationPermission === 'granted' ? '✅ Enabled' : notificationPermission === 'denied' ? '❌ Blocked' : '⏳ Not set up'}
+                    Status: {(() => {
+                      const currentPermission = 'Notification' in window ? Notification.permission : 'denied';
+                      return currentPermission === 'granted' ? '✅ Enabled' : 
+                             currentPermission === 'denied' ? '❌ Blocked' : 
+                             '⏳ Not set up';
+                    })()}
                   </div>
                 </div>
               </div>
