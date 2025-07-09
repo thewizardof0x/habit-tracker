@@ -220,6 +220,11 @@ const HabitTracker = () => {
     setUserMessage('');
     
     try {
+      // Check if Claude API is available
+      if (!window.claude || !window.claude.complete) {
+        throw new Error('Anthropic Claude API not available in this environment');
+      }
+      
       // Prepare comprehensive context for the coach
       const habitDataCSV = generateHabitDataCSV();
       const weeklyStats = getDayOfWeekStats();
@@ -245,22 +250,49 @@ ${weeklyStats.map(stat => `${stat.day}: ${stat.rate}% success rate (${stat.compl
 
 UNLOCKED BADGES: ${unlockedBadgesList.map(badge => badge.name).join(', ') || 'None yet'}
 
-CONVERSATION HISTORY:
-${JSON.stringify(updatedMessages)}
+USER MESSAGE: "${newUserMessage.content}"
 
 Please respond as a supportive, encouraging habit coach. Be specific about their data, celebrate wins, offer practical advice for challenges, and keep responses conversational and motivating. Focus on their progress and provide actionable suggestions based on their actual performance patterns.
 
-Respond with a JSON object:
+RESPOND WITH ONLY VALID JSON:
 {
-  "response": "Your coaching response here",
-  "encouragement_level": "high/medium/low",
-  "action_suggestions": ["suggestion1", "suggestion2"]
+  "response": "Your coaching response here - be encouraging and specific about their ${completionRate}% completion rate and ${currentStreak}-day current streak",
+  "encouragement_level": "high",
+  "action_suggestions": ["specific actionable suggestion based on their data", "another practical tip"]
 }
 
-Your entire response MUST be valid JSON only. Do not include any text outside the JSON structure.`;
+DO NOT include any text outside the JSON. Your entire response must be parseable JSON.`;
 
+      console.log('Sending to Claude API...');
       const response = await window.claude.complete(contextPrompt);
-      const coachResponse = JSON.parse(response);
+      console.log('Claude API response:', response);
+      
+      // Try to parse the response
+      let coachResponse;
+      try {
+        coachResponse = JSON.parse(response);
+      } catch (parseError) {
+        console.error('JSON parse error:', parseError);
+        console.log('Raw response:', response);
+        
+        // Fallback: extract content if it's not properly formatted JSON
+        const responseText = response.toString();
+        if (responseText.includes('"response"')) {
+          // Try to extract just the response text
+          const responseMatch = responseText.match(/"response":\s*"([^"]+)"/);
+          if (responseMatch) {
+            coachResponse = {
+              response: responseMatch[1],
+              encouragement_level: "high",
+              action_suggestions: ["Keep up the great work!", "Stay consistent!"]
+            };
+          } else {
+            throw new Error('Could not parse coach response');
+          }
+        } else {
+          throw new Error('Invalid response format');
+        }
+      }
       
       const newCoachMessage = { 
         role: 'coach', 
@@ -272,11 +304,37 @@ Your entire response MUST be valid JSON only. Do not include any text outside th
       setCoachMessages([...updatedMessages, newCoachMessage]);
       
     } catch (error) {
-      console.error('Coach response error:', error);
+      console.error('Anthropic Claude API error:', error);
+      
+      // Provide specific error messaging
+      let fallbackMessage = '';
+      
+      if (error.message.includes('not available')) {
+        fallbackMessage = `🔧 The Anthropic Claude AI is not available in this environment. `;
+      } else {
+        fallbackMessage = `⚠️ Anthropic Claude AI is experiencing connectivity issues. `;
+      }
+      
+      // Add personalized data-based encouragement
+      if (currentStreak > 0) {
+        fallbackMessage += `But I can see your ${currentStreak}-day streak - that's fantastic! `;
+      }
+      
+      if (completionRate >= 80) {
+        fallbackMessage += `Your ${completionRate}% completion rate is excellent! `;
+      } else if (completionRate >= 60) {
+        fallbackMessage += `Your ${completionRate}% completion rate shows good consistency. `;
+      } else {
+        fallbackMessage += `You've completed ${completedDays.size} days this month - every step counts! `;
+      }
+      
+      fallbackMessage += `Keep building those healthy habits! 💪`;
+      
       const errorMessage = { 
         role: 'coach', 
-        content: "I'm having trouble connecting right now, but I'm here to support you! Keep up the great work with your habits. 💪", 
-        timestamp: new Date() 
+        content: fallbackMessage, 
+        timestamp: new Date(),
+        suggestions: ['Try again later when Claude AI is available', 'Keep tracking your progress', 'Your data shows great progress!']
       };
       setCoachMessages([...updatedMessages, errorMessage]);
     }
@@ -816,7 +874,7 @@ Track progress: ${window.location.href}`);
         {showCoach && (
           <div className="mb-6 p-4 bg-gradient-to-br from-indigo-50 to-purple-50 rounded-lg border border-indigo-200">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-indigo-800">🤖 AI Habit Coach</h3>
+              <h3 className="text-lg font-semibold text-indigo-800">🤖 AI Habit Coach (Powered by Anthropic Claude)</h3>
               <button
                 onClick={clearCoachChat}
                 className="px-3 py-1 text-xs bg-gray-200 text-gray-600 rounded hover:bg-gray-300 transition-colors"
@@ -829,7 +887,7 @@ Track progress: ${window.location.href}`);
               {coachMessages.length === 0 ? (
                 <div className="text-center text-gray-500 py-8">
                   <div className="text-4xl mb-2">👋</div>
-                  <p className="text-sm">Hi! I'm your AI habit coach. I can see all your habit data and I'm here to help you succeed!</p>
+                  <p className="text-sm">Hi! I'm your AI habit coach powered by Anthropic Claude. I can see all your habit data and I'm here to help you succeed!</p>
                   <p className="text-xs mt-2 text-gray-400">Ask me about your progress, get motivation, or request personalized advice.</p>
                 </div>
               ) : (
@@ -897,6 +955,8 @@ Track progress: ${window.location.href}`);
             
             <div className="mt-3 text-xs text-gray-500">
               💡 <strong>Try asking:</strong> "How am I doing this week?" • "What day should I focus on?" • "Give me motivation!" • "Analyze my patterns"
+              <br />
+              <span className="text-indigo-600">⚡ Powered by Anthropic Claude AI</span>
             </div>
           </div>
         )}
