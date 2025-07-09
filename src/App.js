@@ -23,13 +23,27 @@ const HabitTracker = () => {
       if ('Notification' in window) {
         const currentPermission = Notification.permission;
         setNotificationPermission(currentPermission);
-        console.log('Current notification permission:', currentPermission);
+        console.log('Permission check - Current notification permission:', currentPermission);
+        
+        // If permission was previously granted but now denied, show helpful message
+        const wasGranted = localStorage.getItem('notificationWasGranted');
+        if (wasGranted === 'true' && currentPermission === 'denied') {
+          console.log('⚠️ Notification permission was revoked - user may need to re-enable');
+        }
+        
+        // Save current permission state
+        if (currentPermission === 'granted') {
+          localStorage.setItem('notificationWasGranted', 'true');
+        }
       }
     };
     
     checkPermission();
     
-    // Also check when the page becomes visible (in case user changed settings)
+    // Check permission every 5 seconds to catch changes
+    const interval = setInterval(checkPermission, 5000);
+    
+    // Also check when the page becomes visible
     const handleVisibilityChange = () => {
       if (!document.hidden) {
         setTimeout(checkPermission, 100);
@@ -39,6 +53,7 @@ const HabitTracker = () => {
     document.addEventListener('visibilitychange', handleVisibilityChange);
     
     return () => {
+      clearInterval(interval);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, []);
@@ -220,69 +235,74 @@ const HabitTracker = () => {
   };
 
   const sendNotification = (title, body, icon = '🎯') => {
-    // Always check current permission, not state
-    const currentPermission = 'Notification' in window ? Notification.permission : 'denied';
-    
     console.log('Attempting to send notification...');
+    console.log('Title:', title);
+    console.log('Body:', body);
+    
+    // Always check current permission
+    const currentPermission = 'Notification' in window ? Notification.permission : 'denied';
     console.log('Current permission:', currentPermission);
     console.log('Notification support:', 'Notification' in window);
-    
-    let notificationShown = false;
     
     if (currentPermission === 'granted') {
       try {
         const notification = new Notification(title, {
           body: body,
           icon: '/favicon.ico',
-          badge: '/favicon.ico',
           requireInteraction: true,
           silent: false,
-          tag: 'habit-reminder',
+          tag: 'habit-reminder-' + Date.now(),
           renotify: true
         });
         
-        console.log('Notification created successfully');
+        console.log('Notification object created');
         
-        // Test if notification actually appears by checking if it fires events
-        let eventFired = false;
+        // Set up event handlers
+        let notificationWorked = false;
         
         notification.onshow = () => {
-          console.log('Notification actually displayed');
-          eventFired = true;
-          notificationShown = true;
+          console.log('✅ Notification actually displayed!');
+          notificationWorked = true;
         };
         
         notification.onerror = (error) => {
-          console.error('Notification error event:', error);
+          console.error('❌ Notification error event:', error);
+          alert(`🔔 ${title}\n\n${body}\n\n(Notification error - using popup fallback)`);
         };
         
         notification.onclick = () => {
+          console.log('Notification clicked');
           window.focus();
           notification.close();
         };
         
-        // Wait a bit to see if the notification actually shows
+        // Force fallback if notification doesn't show within 1 second
         setTimeout(() => {
-          if (!eventFired) {
-            console.log('Notification was created but never displayed - using fallback');
-            notification.close();
-            alert(`🔔 ${title}\n\n${body}\n\n(Browser notifications seem to be blocked - using popup instead)`);
+          if (!notificationWorked) {
+            console.log('⚠️ Notification created but never displayed - using alert fallback');
+            try {
+              notification.close();
+            } catch (e) {
+              console.log('Could not close notification:', e);
+            }
+            alert(`🔔 ${title}\n\n${body}\n\n(Browser notifications seem to be silently blocked - using popup instead)`);
           }
-        }, 500);
+        }, 1000);
         
+        console.log('Notification setup complete, waiting to see if it displays...');
         return;
+        
       } catch (error) {
-        console.error('Notification creation failed:', error);
+        console.error('❌ Failed to create notification:', error);
+        alert(`🔔 ${title}\n\n${body}\n\n(Notification creation failed - using popup fallback)`);
+        return;
       }
     } else {
-      console.log('Permission not granted, current state:', currentPermission);
+      console.log('❌ Permission not granted:', currentPermission);
     }
     
-    // Immediate fallback if permission not granted or creation failed
-    if (!notificationShown) {
-      console.log('Using alert fallback');
-      alert(`🔔 ${title}\n\n${body}`);
-    }
+    // Immediate fallback for permission issues
+    alert(`🔔 ${title}\n\n${body}\n\n(Notifications not permitted - using popup fallback)`);
   };
 
   const scheduleReminder = () => {
@@ -622,56 +642,87 @@ Track progress: ${window.location.href}`);
               {/* Browser Notifications */}
               <div className="bg-white p-4 rounded-lg border">
                 <h4 className="font-semibold text-gray-700 mb-2">🔔 Browser Notifications</h4>
-                <div className="space-y-3">
-                  <div className="flex items-center gap-3">
-                    <label className="text-sm text-gray-600">Daily reminder time:</label>
-                    <input
-                      type="time"
-                      value={reminderTime}
-                      onChange={(e) => setReminderTime(e.target.value)}
-                      className="px-2 py-1 border border-gray-300 rounded"
-                    />
-                  </div>
+                
+                {(() => {
+                  const currentPermission = 'Notification' in window ? Notification.permission : 'denied';
+                  const wasGranted = localStorage.getItem('notificationWasGranted') === 'true';
                   
-                  <div className="flex gap-2">
-                    {(() => {
-                      const currentPermission = 'Notification' in window ? Notification.permission : 'denied';
-                      console.log('Rendering permission check, current permission:', currentPermission);
-                      return currentPermission !== 'granted' ? (
-                        <button
-                          onClick={requestNotificationPermission}
-                          className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm"
-                        >
-                          Enable Notifications
-                        </button>
-                      ) : (
-                        <div className="flex gap-2">
-                          <button
-                            onClick={scheduleReminder}
-                            className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 text-sm"
-                          >
-                            Schedule Daily Reminder
-                          </button>
-                          <button
-                            onClick={() => sendNotification('Test Notification! 🎯', 'This is how your habit reminders will look! If you see this, notifications are working perfectly.')}
-                            className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 text-sm"
-                          >
-                            Test Notification
-                          </button>
+                  return (
+                    <div className="space-y-3">
+                      {/* Permission status and help */}
+                      {currentPermission === 'denied' && wasGranted && (
+                        <div className="p-3 bg-yellow-100 border border-yellow-400 rounded text-sm">
+                          <div className="font-semibold text-yellow-800">⚠️ Notifications were reset</div>
+                          <div className="text-yellow-700 mt-1">
+                            Chrome seems to have reset your notification permission. 
+                            Click the lock icon in your address bar → Notifications → Allow, 
+                            or use the "Reset permission" button in Chrome settings.
+                          </div>
                         </div>
-                      );
-                    })()}
-                  </div>
-                  
-                  <div className="text-xs text-gray-500">
-                    Status: {(() => {
-                      const currentPermission = 'Notification' in window ? Notification.permission : 'denied';
-                      return currentPermission === 'granted' ? '✅ Enabled' : 
-                             currentPermission === 'denied' ? '❌ Blocked' : 
-                             '⏳ Not set up';
-                    })()}
-                  </div>
-                </div>
+                      )}
+                      
+                      {currentPermission === 'denied' && !wasGranted && (
+                        <div className="p-3 bg-blue-100 border border-blue-400 rounded text-sm">
+                          <div className="font-semibold text-blue-800">💡 Enable notifications for the best experience</div>
+                          <div className="text-blue-700 mt-1">
+                            Get automatic reminders right to your desktop! Click "Enable Notifications" below.
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="flex items-center gap-3">
+                        <label className="text-sm text-gray-600">Daily reminder time:</label>
+                        <input
+                          type="time"
+                          value={reminderTime}
+                          onChange={(e) => setReminderTime(e.target.value)}
+                          className="px-2 py-1 border border-gray-300 rounded"
+                        />
+                      </div>
+                      
+                      <div className="flex gap-2">
+                        {currentPermission !== 'granted' ? (
+                          <div className="space-y-2">
+                            <button
+                              onClick={requestNotificationPermission}
+                              className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm"
+                            >
+                              Enable Notifications
+                            </button>
+                            <div className="text-xs text-gray-500">
+                              If this doesn't work, manually enable in Chrome settings (lock icon → Notifications → Allow)
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex gap-2">
+                            <button
+                              onClick={scheduleReminder}
+                              className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 text-sm"
+                            >
+                              Schedule Daily Reminder
+                            </button>
+                            <button
+                              onClick={() => sendNotification('Test Notification! 🎯', 'This is how your habit reminders will look! If you see this, notifications are working perfectly.')}
+                              className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 text-sm"
+                            >
+                              Test Notification
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                      
+                      <div className="text-xs text-gray-500">
+                        Status: {(() => {
+                          const currentPermission = 'Notification' in window ? Notification.permission : 'denied';
+                          return currentPermission === 'granted' ? '✅ Enabled' : 
+                                 currentPermission === 'denied' ? '❌ Blocked' : 
+                                 '⏳ Not set up';
+                        })()} 
+                        {currentPermission === 'denied' && wasGranted && ' (was previously granted - may need reset)'}
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* Email Reminders */}
