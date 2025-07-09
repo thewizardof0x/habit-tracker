@@ -177,13 +177,38 @@ const HabitTracker = () => {
   const requestNotificationPermission = async () => {
     if ('Notification' in window) {
       try {
+        console.log('Requesting notification permission...');
         const permission = await Notification.requestPermission();
+        console.log('Permission response:', permission);
+        
         setNotificationPermission(permission);
         
-        // Force a re-check after permission change
+        // Force multiple re-checks to catch the permission change
         setTimeout(() => {
-          setNotificationPermission(Notification.permission);
+          const newPermission = Notification.permission;
+          console.log('Permission after 100ms:', newPermission);
+          setNotificationPermission(newPermission);
         }, 100);
+        
+        setTimeout(() => {
+          const newPermission = Notification.permission;
+          console.log('Permission after 500ms:', newPermission);
+          setNotificationPermission(newPermission);
+        }, 500);
+        
+        setTimeout(() => {
+          const newPermission = Notification.permission;
+          console.log('Permission after 1000ms:', newPermission);
+          setNotificationPermission(newPermission);
+        }, 1000);
+        
+        // Test notification immediately if granted
+        if (permission === 'granted') {
+          setTimeout(() => {
+            console.log('Auto-testing notification after permission granted...');
+            sendNotification('Permission Granted! 🎉', 'Notifications are now working! You can now set up your daily reminders.');
+          }, 1200);
+        }
         
         return permission === 'granted';
       } catch (error) {
@@ -583,6 +608,7 @@ Track progress: ${window.location.href}`);
                   <div className="flex gap-2">
                     {(() => {
                       const currentPermission = 'Notification' in window ? Notification.permission : 'denied';
+                      console.log('Rendering permission check, current permission:', currentPermission);
                       return currentPermission !== 'granted' ? (
                         <button
                           onClick={requestNotificationPermission}
