@@ -697,12 +697,12 @@ Track progress: ${window.location.href}`);
         {/* Reminders Section */}
         {showReminders && (
           <div className="mb-6 p-4 bg-gray-50 rounded-lg">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4">Reminders & Notifications</h3>
+            <h3 className="text-lg font-semibold text-gray-800 mb-4">Reminders & Notifications (Optimized for Google Chrome)</h3>
             
             <div className="space-y-4">
               {/* Browser Notifications */}
               <div className="bg-white p-4 rounded-lg border">
-                <h4 className="font-semibold text-gray-700 mb-2">🔔 Browser Notifications</h4>
+                <h4 className="font-semibold text-gray-700 mb-2">🔔 Browser Notifications (Google Chrome Recommended)</h4>
                 
                 {(() => {
                   const currentPermission = 'Notification' in window ? Notification.permission : 'denied';
@@ -724,9 +724,9 @@ Track progress: ${window.location.href}`);
                       
                       {currentPermission === 'denied' && !wasGranted && (
                         <div className="p-3 bg-blue-100 border border-blue-400 rounded text-sm">
-                          <div className="font-semibold text-blue-800">💡 Enable notifications for the best experience</div>
+                          <div className="font-semibold text-blue-800">💡 Best experience with Google Chrome</div>
                           <div className="text-blue-700 mt-1">
-                            Get automatic reminders right to your desktop! Click "Enable Notifications" below.
+                            This app is optimized for Google Chrome. For reliable notifications with sound, please use Chrome and click "Enable Notifications" below.
                           </div>
                         </div>
                       )}
@@ -751,7 +751,7 @@ Track progress: ${window.location.href}`);
                               Enable Notifications
                             </button>
                             <div className="text-xs text-gray-500">
-                              If this doesn't work, manually enable in Chrome settings (lock icon → Notifications → Allow)
+                              If this doesn't work, manually enable in Chrome settings (lock icon → Notifications → Allow). For best results, use Google Chrome browser.
                             </div>
                           </div>
                         ) : (
@@ -788,7 +788,7 @@ Track progress: ${window.location.href}`);
 
               {/* Email Reminders */}
               <div className="bg-white p-4 rounded-lg border">
-                <h4 className="font-semibold text-gray-700 mb-2">📧 Email Reminders</h4>
+                <h4 className="font-semibold text-gray-700 mb-2">📧 Email Reminders (Google Gmail and Calendar Recommended)</h4>
                 
                 {/* Email input */}
                 <div className="mb-3">
