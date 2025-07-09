@@ -17,11 +17,30 @@ const HabitTracker = () => {
   const [celebrationMessage, setCelebrationMessage] = useState('');
   const [showCelebration, setShowCelebration] = useState(false);
 
-  // Check notification permission on component mount
+  // Check notification permission on component mount and periodically
   useEffect(() => {
-    if ('Notification' in window) {
-      setNotificationPermission(Notification.permission);
-    }
+    const checkPermission = () => {
+      if ('Notification' in window) {
+        const currentPermission = Notification.permission;
+        setNotificationPermission(currentPermission);
+        console.log('Current notification permission:', currentPermission);
+      }
+    };
+    
+    checkPermission();
+    
+    // Also check when the page becomes visible (in case user changed settings)
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        setTimeout(checkPermission, 100);
+      }
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, []);
 
   const today = new Date();
@@ -179,25 +198,38 @@ const HabitTracker = () => {
     // Always check current permission, not state
     const currentPermission = 'Notification' in window ? Notification.permission : 'denied';
     
+    console.log('Attempting to send notification...');
+    console.log('Current permission:', currentPermission);
+    console.log('Notification support:', 'Notification' in window);
+    
     if (currentPermission === 'granted') {
       try {
-        new Notification(title, {
+        const notification = new Notification(title, {
           body: body,
           icon: '/favicon.ico',
           badge: '/favicon.ico',
           requireInteraction: false,
           silent: false
         });
+        
+        console.log('Notification created successfully');
+        
+        notification.onclick = () => {
+          window.focus();
+          notification.close();
+        };
+        
+        return;
       } catch (error) {
-        console.error('Notification error:', error);
-        // Fallback - show browser alert
-        alert(`${title}\n\n${body}`);
+        console.error('Notification creation failed:', error);
       }
     } else {
-      console.log('Notifications not permitted, using fallback');
-      // Fallback - show browser alert
-      alert(`${title}\n\n${body}`);
+      console.log('Permission not granted, current state:', currentPermission);
     }
+    
+    // Fallback - show browser alert
+    console.log('Using alert fallback');
+    alert(`${title}\n\n${body}`);
   };
 
   const scheduleReminder = () => {
@@ -206,21 +238,50 @@ const HabitTracker = () => {
     const reminderDate = new Date();
     reminderDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
     
+    // If time has passed today, schedule for tomorrow
     if (reminderDate <= now) {
       reminderDate.setDate(reminderDate.getDate() + 1);
     }
     
     const timeUntilReminder = reminderDate.getTime() - now.getTime();
     
+    console.log(`Reminder scheduled for: ${reminderDate.toLocaleString()}`);
+    console.log(`Time until reminder: ${Math.round(timeUntilReminder / 1000 / 60)} minutes`);
+    
     setTimeout(() => {
+      console.log('Reminder time reached!');
       if (!completedDays.has(today.getDate())) {
-        sendNotification(
-          `${habitName} Reminder! ⏰`,
-          `Don't forget your daily ${habitName.toLowerCase()}. Keep your ${currentStreak}-day streak alive!`,
-          '🔔'
-        );
+        const title = `${habitName} Reminder! ⏰`;
+        const body = `Don't forget your daily ${habitName.toLowerCase()}. Keep your ${currentStreak}-day streak alive!`;
+        
+        // Force check permission again at reminder time
+        const currentPermission = 'Notification' in window ? Notification.permission : 'denied';
+        console.log('Permission at reminder time:', currentPermission);
+        
+        if (currentPermission === 'granted') {
+          try {
+            new Notification(title, {
+              body: body,
+              icon: '/favicon.ico',
+              requireInteraction: true,
+              silent: false
+            });
+            console.log('Notification sent successfully');
+          } catch (error) {
+            console.error('Notification failed:', error);
+            alert(`${title}\n\n${body}`);
+          }
+        } else {
+          console.log('Using alert fallback for reminder');
+          alert(`${title}\n\n${body}`);
+        }
+      } else {
+        console.log('Habit already completed today, skipping reminder');
       }
     }, timeUntilReminder);
+    
+    // Show confirmation
+    alert(`Daily reminder scheduled for ${reminderDate.toLocaleTimeString()}!\n\nCheck the browser console for debug info.`);
   };
 
   const triggerCelebration = (message) => {
