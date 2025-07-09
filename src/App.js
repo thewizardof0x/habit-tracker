@@ -234,7 +234,39 @@ const HabitTracker = () => {
     return false;
   };
 
-  const sendNotification = (title, body, icon = '🎯') => {
+  const playNotificationSound = () => {
+    try {
+      // Create an audio context and play a notification beep
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+      
+      // Create a pleasant notification sound (two beeps)
+      oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
+      oscillator.frequency.setValueAtTime(600, audioContext.currentTime + 0.1);
+      
+      gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+      
+      oscillator.start(audioContext.currentTime);
+      oscillator.stop(audioContext.currentTime + 0.3);
+      
+      console.log('🔊 Played custom notification sound');
+    } catch (error) {
+      console.log('Could not play custom sound:', error);
+      // Fallback: try system beep
+      try {
+        const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmEYBStDKqYe2J5FT0iKidGMhfkuXLSx+rBqM5MtQCxcN6dE8IZnWWi3nCHcGrKrcTgEDr1tGz5AKqaA2J5FT0iKidGMhfkuXLSx+rBqM5MtQCxcN6dE8IZnWWi3nCHcGrKrcTgE');
+        audio.play();
+        console.log('🔊 Played fallback audio beep');
+      } catch (audioError) {
+        console.log('Could not play any sound:', audioError);
+      }
+    }
+  };
     console.log('Attempting to send notification...');
     console.log('Title:', title);
     console.log('Body:', body);
