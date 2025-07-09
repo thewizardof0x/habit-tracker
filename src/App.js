@@ -17,6 +17,26 @@ const HabitTracker = () => {
   const [celebrationMessage, setCelebrationMessage] = useState('');
   const [showCelebration, setShowCelebration] = useState(false);
 
+  const today = new Date();
+  const currentMonth = today.getMonth();
+  const currentYear = today.getFullYear();
+
+  // Get days in current month
+  const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+  const firstDayOfMonth = new Date(currentYear, currentMonth, 1).getDay();
+
+  // Badge definitions
+  const badges = [
+    { id: 'first-step', name: 'First Step', description: 'Complete your first day', requirement: 1, icon: '🎯', type: 'total' },
+    { id: 'week-warrior', name: 'Week Warrior', description: '7-day streak', requirement: 7, icon: '🔥', type: 'streak' },
+    { id: 'consistency-king', name: 'Consistency King', description: '14-day streak', requirement: 14, icon: '👑', type: 'streak' },
+    { id: 'unstoppable', name: 'Unstoppable', description: '21-day streak', requirement: 21, icon: '💎', type: 'streak' },
+    { id: 'legend', name: 'Legend', description: '30-day streak', requirement: 30, icon: '🏆', type: 'streak' },
+    { id: 'ten-club', name: 'Ten Club', description: 'Complete 10 days total', requirement: 10, icon: '⭐', type: 'total' },
+    { id: 'goal-crusher', name: 'Goal Crusher', description: 'Reach weekly goal', requirement: 'weekly', icon: '💪', type: 'goal' },
+    { id: 'month-master', name: 'Month Master', description: 'Reach monthly goal', requirement: 'monthly', icon: '🎊', type: 'goal' }
+  ];
+
   // Check notification permission on component mount and periodically
   useEffect(() => {
     const checkPermission = () => {
@@ -58,26 +78,6 @@ const HabitTracker = () => {
     };
   }, []);
 
-  const today = new Date();
-  const currentMonth = today.getMonth();
-  const currentYear = today.getFullYear();
-
-  // Get days in current month
-  const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
-  const firstDayOfMonth = new Date(currentYear, currentMonth, 1).getDay();
-
-  // Badge definitions
-  const badges = [
-    { id: 'first-step', name: 'First Step', description: 'Complete your first day', requirement: 1, icon: '🎯', type: 'total' },
-    { id: 'week-warrior', name: 'Week Warrior', description: '7-day streak', requirement: 7, icon: '🔥', type: 'streak' },
-    { id: 'consistency-king', name: 'Consistency King', description: '14-day streak', requirement: 14, icon: '👑', type: 'streak' },
-    { id: 'unstoppable', name: 'Unstoppable', description: '21-day streak', requirement: 21, icon: '💎', type: 'streak' },
-    { id: 'legend', name: 'Legend', description: '30-day streak', requirement: 30, icon: '🏆', type: 'streak' },
-    { id: 'ten-club', name: 'Ten Club', description: 'Complete 10 days total', requirement: 10, icon: '⭐', type: 'total' },
-    { id: 'goal-crusher', name: 'Goal Crusher', description: 'Reach weekly goal', requirement: 'weekly', icon: '💪', type: 'goal' },
-    { id: 'month-master', name: 'Month Master', description: 'Reach monthly goal', requirement: 'monthly', icon: '🎊', type: 'goal' }
-  ];
-
   // Generate calendar days
   const generateCalendarDays = () => {
     const days = [];
@@ -95,97 +95,110 @@ const HabitTracker = () => {
 
   const calendarDays = generateCalendarDays();
 
-  // Calculate streaks and goals
-  useEffect(() => {
-    const calculateStreaks = () => {
-      const sortedDays = Array.from(completedDays).sort((a, b) => a - b);
-      
-      let current = 0;
-      let longest = 0;
-      let tempStreak = 0;
-      
-      // Check for current streak (from today backwards)
-      let checkDay = today.getDate();
-      while (checkDay > 0 && completedDays.has(checkDay)) {
-        current++;
-        checkDay--;
-      }
-      
-      // Calculate longest streak
-      for (let i = 0; i < sortedDays.length; i++) {
-        if (i === 0 || sortedDays[i] === sortedDays[i - 1] + 1) {
-          tempStreak++;
-        } else {
-          tempStreak = 1;
-        }
-        longest = Math.max(longest, tempStreak);
-      }
-      
-      setCurrentStreak(current);
-      setLongestStreak(longest);
-    };
-    
-    calculateStreaks();
-  }, [completedDays]);
+  // Calculate day of week statistics
+  const getDayOfWeekStats = () => {
+    const dayStats = Array(7).fill(null).map((_, i) => ({
+      day: dayNames[i],
+      completed: 0,
+      total: 0,
+      rate: 0
+    }));
 
-  const toggleDay = (day) => {
-    if (day > today.getDate()) return;
-    
-    const newCompletedDays = new Set(completedDays);
-    const wasCompleted = newCompletedDays.has(day);
-    
-    if (wasCompleted) {
-      newCompletedDays.delete(day);
-    } else {
-      newCompletedDays.add(day);
-      
-      // Check for celebrations
-      if (day === today.getDate()) {
-        const newStreak = calculateCurrentStreak(newCompletedDays);
-        const newTotalDays = newCompletedDays.size;
-        
-        // Celebrate streaks
-        if (newStreak === 7) triggerCelebration('🔥 Week Warrior badge unlocked!');
-        else if (newStreak === 14) triggerCelebration('👑 Consistency King badge unlocked!');
-        else if (newStreak === 21) triggerCelebration('💎 Unstoppable badge unlocked!');
-        else if (newStreak === 30) triggerCelebration('🏆 Legend badge unlocked!');
-        else if (newTotalDays === 10) triggerCelebration('⭐ Ten Club badge unlocked!');
-        else if (newTotalDays === monthlyGoal) triggerCelebration('🎊 Month Master badge unlocked!');
-        else if (getCurrentWeekCompletions() + 1 === weeklyGoal) triggerCelebration('💪 Goal Crusher badge unlocked!');
-        else triggerCelebration(`Great job! Day ${day} completed! 🎉`);
-        
-        // Send notification
-        if (notificationPermission === 'granted') {
-          sendNotification(
-            'Habit Completed! 🎉',
-            `You completed ${habitName} today! Current streak: ${newStreak} days`,
-            '✅'
-          );
-        }
+    for (let day = 1; day <= today.getDate(); day++) {
+      const date = new Date(currentYear, currentMonth, day);
+      const dayOfWeek = date.getDay();
+      dayStats[dayOfWeek].total++;
+      if (completedDays.has(day)) {
+        dayStats[dayOfWeek].completed++;
       }
     }
+
+    dayStats.forEach(stat => {
+      stat.rate = stat.total > 0 ? Math.round((stat.completed / stat.total) * 100) : 0;
+    });
+
+    return dayStats;
+  };
+
+  // Get weekly patterns
+  const getWeeklyPatterns = () => {
+    const dayStats = getDayOfWeekStats();
+    const bestDay = dayStats.reduce((best, current) => 
+      current.rate > best.rate ? current : best
+    );
+    const worstDay = dayStats.reduce((worst, current) => 
+      current.total > 0 && current.rate < worst.rate ? current : worst
+    );
     
-    setCompletedDays(newCompletedDays);
+    return { bestDay, worstDay, dayStats };
   };
 
-  const calculateCurrentStreak = (days) => {
-    let streak = 0;
-    let checkDay = today.getDate();
-    while (checkDay > 0 && days.has(checkDay)) {
-      streak++;
-      checkDay--;
+  // Calculate monthly trends
+  const getMonthlyTrends = () => {
+    const weeks = [];
+    let currentWeek = [];
+    
+    // Group days into weeks
+    for (let day = 1; day <= today.getDate(); day++) {
+      const date = new Date(currentYear, currentMonth, day);
+      const dayOfWeek = date.getDay();
+      
+      if (dayOfWeek === 0 && currentWeek.length > 0) {
+        weeks.push([...currentWeek]);
+        currentWeek = [];
+      }
+      
+      currentWeek.push({
+        day,
+        completed: completedDays.has(day),
+        dayOfWeek
+      });
     }
-    return streak;
+    
+    if (currentWeek.length > 0) {
+      weeks.push(currentWeek);
+    }
+    
+    // Calculate week performance
+    const weekPerformance = weeks.map((week, index) => {
+      const completed = week.filter(d => d.completed).length;
+      const total = week.length;
+      return {
+        week: index + 1,
+        completed,
+        total,
+        rate: Math.round((completed / total) * 100)
+      };
+    });
+    
+    return weekPerformance;
   };
 
-  const getIntensity = (day) => {
-    if (!day || day > today.getDate()) return 'bg-gray-100';
-    return completedDays.has(day) ? 'bg-green-500' : 'bg-gray-200';
-  };
-
-  const getHoverIntensity = (day) => {
-    if (!day || day > today.getDate()) return '';
-    return completedDays.has(day) ? 'hover:bg-green-600' : 'hover:bg-gray-300';
+  // Play notification sound
+  const playNotificationSound = () => {
+    try {
+      // Create an audio context and play a notification beep
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+      
+      // Create a pleasant notification sound (two beeps)
+      oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
+      oscillator.frequency.setValueAtTime(600, audioContext.currentTime + 0.1);
+      
+      gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+      
+      oscillator.start(audioContext.currentTime);
+      oscillator.stop(audioContext.currentTime + 0.3);
+      
+      console.log('🔊 Played custom notification sound');
+    } catch (error) {
+      console.log('Could not play custom sound:', error);
+    }
   };
 
   // Notification and reminder functions
@@ -234,42 +247,13 @@ const HabitTracker = () => {
     return false;
   };
 
-  const playNotificationSound = () => {
-    try {
-      // Create an audio context and play a notification beep
-      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-      const oscillator = audioContext.createOscillator();
-      const gainNode = audioContext.createGain();
-      
-      oscillator.connect(gainNode);
-      gainNode.connect(audioContext.destination);
-      
-      // Create a pleasant notification sound (two beeps)
-      oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
-      oscillator.frequency.setValueAtTime(600, audioContext.currentTime + 0.1);
-      
-      gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
-      
-      oscillator.start(audioContext.currentTime);
-      oscillator.stop(audioContext.currentTime + 0.3);
-      
-      console.log('🔊 Played custom notification sound');
-    } catch (error) {
-      console.log('Could not play custom sound:', error);
-      // Fallback: try system beep
-      try {
-        const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmEYBStDKqYe2J5FT0iKidGMhfkuXLSx+rBqM5MtQCxcN6dE8IZnWWi3nCHcGrKrcTgEDr1tGz5AKqaA2J5FT0iKidGMhfkuXLSx+rBqM5MtQCxcN6dE8IZnWWi3nCHcGrKrcTgE');
-        audio.play();
-        console.log('🔊 Played fallback audio beep');
-      } catch (audioError) {
-        console.log('Could not play any sound:', audioError);
-      }
-    }
-  };
+  const sendNotification = (title, body, icon = '🎯') => {
     console.log('Attempting to send notification...');
     console.log('Title:', title);
     console.log('Body:', body);
+    
+    // Always play sound first
+    playNotificationSound();
     
     // Always check current permission
     const currentPermission = 'Notification' in window ? Notification.permission : 'denied';
@@ -282,28 +266,25 @@ const HabitTracker = () => {
           body: body,
           icon: '/favicon.ico',
           requireInteraction: true,
-          silent: false,  // Explicitly request sound
-          sound: '/notification.mp3', // Custom sound (if available)
+          silent: false,
+          sound: '/notification.mp3',
           tag: 'habit-reminder-' + Date.now(),
           renotify: true,
-          vibrate: [200, 100, 200] // For devices that support vibration
+          vibrate: [200, 100, 200]
         });
         
         console.log('Notification object created');
         
         // Set up event handlers
-        let notificationWorked = false;
         let userInteracted = false;
         
         notification.onshow = () => {
           console.log('⚠️ onshow event fired (but this can be unreliable on Mac)');
-          // Don't trust onshow on Mac - it often lies
         };
         
         notification.onclick = () => {
           console.log('✅ Notification was actually clicked - it definitely showed!');
           userInteracted = true;
-          notificationWorked = true;
           window.focus();
           notification.close();
         };
@@ -329,7 +310,7 @@ const HabitTracker = () => {
             }
             alert(`🔔 ${title}\n\n${body}\n\n(Browser notifications seem to be silently blocked by macOS/Chrome - using reliable popup instead)`);
           }
-        }, 2000); // Give 2 seconds for user to potentially click
+        }, 2000);
         
         console.log('Notification setup complete, waiting to see if user interacts...');
         return;
@@ -450,6 +431,27 @@ Your Habit Tracker 🎯`);
     window.open(gmailUrl, '_blank');
   };
 
+  const generateGoogleCalendarReminder = () => {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(parseInt(reminderTime.split(':')[0]), parseInt(reminderTime.split(':')[1]), 0, 0);
+    
+    const startTime = tomorrow.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+    const endTime = new Date(tomorrow.getTime() + 30 * 60000).toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+    
+    const title = encodeURIComponent(`${habitName} Daily Reminder`);
+    const details = encodeURIComponent(`Time for your daily ${habitName}! 
+
+Current streak: ${currentStreak} days
+Don't break the chain! 🔥
+
+Track progress: ${window.location.href}`);
+    
+    const googleCalendarUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${startTime}/${endTime}&details=${details}&recur=RRULE:FREQ=DAILY`;
+    
+    window.open(googleCalendarUrl, '_blank');
+  };
+
   // Smart email detection attempt
   const tryDetectEmail = () => {
     // Try to get email from Google account (if signed in)
@@ -484,103 +486,100 @@ Your Habit Tracker 🎯`);
     }
   };
 
-  const generateGoogleCalendarReminder = () => {
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    tomorrow.setHours(parseInt(reminderTime.split(':')[0]), parseInt(reminderTime.split(':')[1]), 0, 0);
-    
-    const startTime = tomorrow.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
-    const endTime = new Date(tomorrow.getTime() + 30 * 60000).toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
-    
-    const title = encodeURIComponent(`${habitName} Daily Reminder`);
-    const details = encodeURIComponent(`Time for your daily ${habitName}! 
-
-Current streak: ${currentStreak} days
-Don't break the chain! 🔥
-
-Track progress: ${window.location.href}`);
-    
-    const googleCalendarUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${startTime}/${endTime}&details=${details}&recur=RRULE:FREQ=DAILY`;
-    
-    window.open(googleCalendarUrl, '_blank');
-  };
-  const getDayOfWeekStats = () => {
-    const dayStats = Array(7).fill(null).map((_, i) => ({
-      day: dayNames[i],
-      completed: 0,
-      total: 0,
-      rate: 0
-    }));
-
-    for (let day = 1; day <= today.getDate(); day++) {
-      const date = new Date(currentYear, currentMonth, day);
-      const dayOfWeek = date.getDay();
-      dayStats[dayOfWeek].total++;
-      if (completedDays.has(day)) {
-        dayStats[dayOfWeek].completed++;
-      }
-    }
-
-    dayStats.forEach(stat => {
-      stat.rate = stat.total > 0 ? Math.round((stat.completed / stat.total) * 100) : 0;
-    });
-
-    return dayStats;
-  };
-
-  // Get weekly patterns
-  const getWeeklyPatterns = () => {
-    const dayStats = getDayOfWeekStats();
-    const bestDay = dayStats.reduce((best, current) => 
-      current.rate > best.rate ? current : best
-    );
-    const worstDay = dayStats.reduce((worst, current) => 
-      current.total > 0 && current.rate < worst.rate ? current : worst
-    );
-    
-    return { bestDay, worstDay, dayStats };
-  };
-
-  // Calculate monthly trends
-  const getMonthlyTrends = () => {
-    const weeks = [];
-    let currentWeek = [];
-    
-    // Group days into weeks
-    for (let day = 1; day <= today.getDate(); day++) {
-      const date = new Date(currentYear, currentMonth, day);
-      const dayOfWeek = date.getDay();
+  // Calculate streaks and goals
+  useEffect(() => {
+    const calculateStreaks = () => {
+      const sortedDays = Array.from(completedDays).sort((a, b) => a - b);
       
-      if (dayOfWeek === 0 && currentWeek.length > 0) {
-        weeks.push([...currentWeek]);
-        currentWeek = [];
+      let current = 0;
+      let longest = 0;
+      let tempStreak = 0;
+      
+      // Check for current streak (from today backwards)
+      let checkDay = today.getDate();
+      while (checkDay > 0 && completedDays.has(checkDay)) {
+        current++;
+        checkDay--;
       }
       
-      currentWeek.push({
-        day,
-        completed: completedDays.has(day),
-        dayOfWeek
-      });
+      // Calculate longest streak
+      for (let i = 0; i < sortedDays.length; i++) {
+        if (i === 0 || sortedDays[i] === sortedDays[i - 1] + 1) {
+          tempStreak++;
+        } else {
+          tempStreak = 1;
+        }
+        longest = Math.max(longest, tempStreak);
+      }
+      
+      setCurrentStreak(current);
+      setLongestStreak(longest);
+    };
+    
+    calculateStreaks();
+  }, [completedDays]);
+
+  const toggleDay = (day) => {
+    if (day > today.getDate()) return;
+    
+    const newCompletedDays = new Set(completedDays);
+    const wasCompleted = newCompletedDays.has(day);
+    
+    if (wasCompleted) {
+      newCompletedDays.delete(day);
+    } else {
+      newCompletedDays.add(day);
+      
+      // Check for celebrations
+      if (day === today.getDate()) {
+        const newStreak = calculateCurrentStreak(newCompletedDays);
+        const newTotalDays = newCompletedDays.size;
+        
+        // Celebrate streaks
+        if (newStreak === 7) triggerCelebration('🔥 Week Warrior badge unlocked!');
+        else if (newStreak === 14) triggerCelebration('👑 Consistency King badge unlocked!');
+        else if (newStreak === 21) triggerCelebration('💎 Unstoppable badge unlocked!');
+        else if (newStreak === 30) triggerCelebration('🏆 Legend badge unlocked!');
+        else if (newTotalDays === 10) triggerCelebration('⭐ Ten Club badge unlocked!');
+        else if (newTotalDays === monthlyGoal) triggerCelebration('🎊 Month Master badge unlocked!');
+        else if (getCurrentWeekCompletions() + 1 === weeklyGoal) triggerCelebration('💪 Goal Crusher badge unlocked!');
+        else triggerCelebration(`Great job! Day ${day} completed! 🎉`);
+        
+        // Send notification
+        if (notificationPermission === 'granted') {
+          sendNotification(
+            'Habit Completed! 🎉',
+            `You completed ${habitName} today! Current streak: ${newStreak} days`,
+            '✅'
+          );
+        }
+      }
     }
     
-    if (currentWeek.length > 0) {
-      weeks.push(currentWeek);
-    }
-    
-    // Calculate week performance
-    const weekPerformance = weeks.map((week, index) => {
-      const completed = week.filter(d => d.completed).length;
-      const total = week.length;
-      return {
-        week: index + 1,
-        completed,
-        total,
-        rate: Math.round((completed / total) * 100)
-      };
-    });
-    
-    return weekPerformance;
+    setCompletedDays(newCompletedDays);
   };
+
+  const calculateCurrentStreak = (days) => {
+    let streak = 0;
+    let checkDay = today.getDate();
+    while (checkDay > 0 && days.has(checkDay)) {
+      streak++;
+      checkDay--;
+    }
+    return streak;
+  };
+
+  const getIntensity = (day) => {
+    if (!day || day > today.getDate()) return 'bg-gray-100';
+    return completedDays.has(day) ? 'bg-green-500' : 'bg-gray-200';
+  };
+
+  const getHoverIntensity = (day) => {
+    if (!day || day > today.getDate()) return '';
+    return completedDays.has(day) ? 'hover:bg-green-600' : 'hover:bg-gray-300';
+  };
+
+  // Check badge unlock status
   const isBadgeUnlocked = (badge) => {
     switch (badge.type) {
       case 'streak':
@@ -1075,7 +1074,7 @@ Track progress: ${window.location.href}`);
             <div
               key={index}
               onClick={() => day && toggleDay(day)}
-                              className={`
+              className={`
                 w-8 h-8 rounded-sm flex items-center justify-center text-xs font-medium
                 transition-colors duration-200 cursor-pointer
                 ${day ? getIntensity(day) : 'bg-transparent'}
